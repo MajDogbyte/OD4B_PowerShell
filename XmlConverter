@@ -1,0 +1,286 @@
+Set-StrictMode -version 2
+cls
+function Write-Color([String[]]$Text, [ConsoleColor[]]$Color) {
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        Write-Host $Text[$i] -Foreground $Color[$i] -NoNewLine
+    }
+    Write-Host
+}
+
+
+
+# Show an Open Folder Dialog and return the directory selected by the user.
+
+function Select-FolderDialog([string]$Message, [string]$InitialDirectory){
+
+    $app = New-Object -ComObject Shell.Application
+    $folder = $app.BrowseForFolder(0, $Message, 0, $InitialDirectory)
+    if ($folder) { return $folder.Self.Path + "\" } else { 
+    
+            Write-Host "************************************************" -ForegroundColor Yellow
+            Write-Host "| No path chosen!                              |" -ForegroundColor Yellow
+            Write-Host "| Derpy Derp! Cannot Proceed!                  |" -ForegroundColor Yellow
+            Write-Host "|                                              |" -ForegroundColor Yellow
+            Write-Host "| Rerun the script and choose a folder, else...|" -ForegroundColor Yellow
+            Write-Host "|                                              |" -ForegroundColor Yellow
+            Write-Host "| Press <Enter> to end session.                |" -ForegroundColor Yellow
+            Write-Host "************************************************" -ForegroundColor Yellow
+    
+            Read-Host 
+            exit       
+    }
+}
+function SetFileTimes([string]$oldFilePath,[string] $newFilePath){
+   $oldFile = $null
+   $newFile = $null
+    $oldFile = Get-Item -Path  $oldFilePath
+    $newFile = Get-Item -Path $newFilePath
+    if($newFile -ne $null){
+        if($oldFile -ne $null){
+            $NewFile.CreationTime= $oldFile.CreationTime
+            $NewFile.LastAccessTime= $oldFile.LastAccessTime
+            $NewFile.LastWriteTime = $oldFile.LastWriteTime 
+        }
+    }
+}
+function BuildPath([string]$ExistingPath, [string]$Extension){
+    $TempPath =""
+    $TempPath  = ($ExistingPath).substring(0,($ExistingPath).lastindexOf(“.”)).Replace($Global:CurrentFolder,$Global:outpath) 
+    If($TempPath.length -lt 255){
+       $TempPath = $TempPath + $Extension
+    }else{
+        stop
+    
+    }
+    return $TempPath
+}
+function ConvertDocRTF($CurrDocPath){
+    
+    Try{
+	   $opendoc = $Global:word.documents.open($CurrDocPath,$false,$true) #confirmconversions = false, readonly = true
+        $opendoc.ActiveWindow.View = 3 #wdPrintView
+       $opendoc.Convert()
+    }Catch{
+        $opendoc = $null}
+    if($opendoc -ne $null){
+        if($opendoc.HasVBProject -eq $false){
+                $savename = BuildPath $CurrDocPath ".docx"
+            Try{
+                Remove-Item -Path $savename -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+                $opendoc.saveas(“$savename”, $Global:wordSaveFormat)
+            }Catch{$savename = ""}
+        }else{
+            $savename = BuildPath $CurrDocPath ".docm"
+            Try{
+                Remove-Item -Path $savename -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+                $opendoc.saveas(“$savename”, $Global:wordSaveFormatMacro) 
+             }Catch{$savename = ""}
+        }
+
+    	$opendoc.Close();
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($opendoc)
+        Remove-Variable $opendoc
+        
+        return $savename 
+        }else{
+            return ""
+        }
+}
+function ConvertPPT($CurrDeckPath){
+    
+	Try{
+        $opendeck = $Global:PowerP.Presentations.open($CurrDeckPath,$false,$true) #confirmconversions = false, readonly = true
+    }Catch{
+        $opendeck =$null
+    }
+    if($opendeck -ne $null){
+        if($opendeck.HasVBProject -eq $false){
+            
+            $savename = BuildPath $CurrDeckPath ".pptx"
+        }else{
+            $savename = BuildPath $CurrDeckPath ".pptm"
+        }
+        Try{
+            Remove-Item -Path $savename -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+            $opendeck.Convert2(“$savename”)
+        }Catch{$savename = ""}
+    	$opendeck.close();
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($opendeck)
+        Remove-Variable $opendeck
+
+        return $savename
+     }else{
+        return ""
+     }
+}
+function ConvertExcel($CurrBookPath){
+	$openbook = $null
+    Try{
+        $openbook = $Global:Excel.Workbooks.open($CurrBookPath,$false,$true) #confirmconversions = false, readonly = true
+    }Catch{
+        $openbook =$null
+    }
+    if($openbook -ne $null){
+        $openbook.CheckCompatibility =$false
+    	
+        if($openbook.HasVBProject -eq $false){
+            
+            $savename = BuildPath $CurrBookPath ".xlsx"
+            Try{
+                Remove-Item -Path $savename -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+        	   $openbook.SaveAs(“$savename”,$Global:ExcelSaveFormat)
+            }Catch{$savename = ""}
+        }else{
+             
+            $savename = BuildPath $CurrBookPath ".xlsm"
+            Try{
+                Remove-Item -Path $savename -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+        	   $openbook.SaveAs(“$savename”,$Global:ExcelSaveFormatMacros)
+            }Catch{$savename = ""}
+        }
+       	$openbook.close();
+       [System.Runtime.Interopservices.Marshal]::ReleaseComObject($openbook)
+        Remove-Variable $openbook
+        return $savename
+    } 
+}
+function LoopFolders($CurrFolderPath){
+     
+    $Folders = dir $CurrFolderPath -recurse -Force | where {$_.psiscontainer -eq $true}
+    #$Folders | ForEach-Object -Process{ $count++} 
+    $Folders | ForEach-Object -Process{
+        LoopFolders($_.FullName)
+    }
+     Get-ChildItem -path ($CurrFolderPath + "\*")  -include "*.*" -Force | foreach-object -Process{
+
+        Write-Progress -Activity "Conversion in Progress..." -Status "$count" -PercentComplete ($count / $alltotal * 100)
+        $Global:CurrentFolder=  $CurrFolderPath
+        $NewFilePath = ""
+                 
+        $CurrFilePath = $_.FullName
+        $Global:outpath = $CurrFolderPath
+        #$backuppath = $CurrFolderPath.Replace($Global:rootpath,$Global:backuprootpath)
+      # If((Test-Path $backuppath ) -eq $false){                                    \\This area disables the creation of a backup path
+       #     new-item -itemtype Directory -Force -Path $backuppath -Confirm:$false
+       
+       
+        switch($_.Extension.ToLower())
+        {
+            ".doc"{$NewFilePath =ConvertDocRTF ($CurrFilePath )}
+            ".rtf"{$NewFilePath =ConvertDocRTF ($CurrFilePath )}
+            ".wpd"{$NewFilePath =ConvertDocRTF ($CurrFilePath )}
+                    
+            ".ppt"{$NewFilePath =ConvertPPT ($CurrFilePath )}
+            ".xls"{$NewFilePath =ConvertExcel ($CurrFilePath )}
+            default{$count++ }
+        }
+        if($NewFilePath -ne ""){
+            Write-Host $NewFilePath -ForegroundColor Yellow
+            SetFileTimes $CurrFilePath $NewFilePath
+            Remove-Item $CurrFilePath
+            $count++  
+            #Move-Item $CurrFilePath $backuppath     //if you uncomment this line, then comment out line 171
+        }
+       
+    }
+}
+
+
+
+
+Add-Type -AssemblyName Microsoft.Office.Interop.Excel
+Add-Type -AssemblyName Microsoft.Office.Interop.Word
+Add-Type -AssemblyName Microsoft.Office.Interop.PowerPoint
+
+Write-Host
+Write-Host
+Write-Host
+Write-Host
+Write-Host
+Write-Host
+Write-Host
+Write-Host
+Write-Host
+Write-Host "****************************************************************" -ForegroundColor Yellow
+Write-Color -Text "|"," Please select the folder you wish to convert the contents to ","|" -Color Yellow, Green, Yellow
+Write-Color -Text "|"," O365 compatible. ","                                            |" -Color Yellow, Green, Yellow 
+Write-Host "****************************************************************" -ForegroundColor Yellow
+
+$anim=@("|","/","-","\","|") # Animation sequence characters
+
+Write-Host
+Write-Host
+Write-Host
+
+$Global:rootpath = Select-FolderDialog #[System.Environment]::CurrentDirectory + "\" #The root of the directory tree where you want to convert your files - should end with 
+Write-Host "Running process on root folder" $Global:rootpath"*.*"
+Write-Host
+#$backupfolder = [System.Environment]::CurrentDirectory.split("\")[-1] 
+#$Global:backuprootpath = ([System.Environment]::CurrentDirectory | split-path) + "\$backupfolder" + "_bak" #The root of the directory where a back-up copy of the .doc,ppt and xls files should be placed. Sub-dirs will be created - should end with \
+#To enable the backup functionality, uncomment line 10, and 153-157, and 172 (read notes on 172).
+
+$ErrorActionPreference = "silentlycontinue" 
+$WarningPreference = "silentlycontinue"
+
+$Global:word = new-object -comobject word.application
+$Global:PowerP = new-object -comobject PowerPoint.application
+$Global:Excel = new-object -comobject Excel.application
+Write-Host            "*********************************************" -ForegroundColor Yellow
+Write-Color -Text "|"," Starting Office apps in the background....","|" -Color Yellow, Green, Yellow 
+$Global:wordSaveFormat = [Enum]::Parse([Microsoft.Office.Interop.Word.WdSaveFormat],”wdFormatDocumentDefault”)
+$Global:wordSaveFormatMacro = [Enum]::Parse([Microsoft.Office.Interop.Word.WdSaveFormat],”wdFormatXMLDocumentMacroEnabled”)
+
+$Global:PowerPSaveFormat = [Enum]::Parse([Microsoft.Office.Interop.PowerPoint.PpSaveAsFileType],”ppSaveAsPresentation”)
+$Global:ExcelSaveFormat = [Enum]::Parse([Microsoft.Office.Interop.Excel.XlFileFormat],”xlWorkbookDefault”)
+$Global:ExcelSaveFormatMacros = [Enum]::Parse([Microsoft.Office.Interop.Excel.XlFileFormat],”xlOpenXMLWorkbookMacroEnabled”)
+
+$Global:outpath = "" 
+$Global:CurrentFolder =""
+Write-Color -Text "|"," Gathering all files and folders...........","|" -Color Yellow, Green, Yellow
+$totalFiles = Get-ChildItem $Global:rootpath -Recurse | where {$_.psiscontainer -eq $false}
+
+$totalFolders = Get-ChildItem $Global:rootpath -Recurse | where {$_.psiscontainer -eq $true}
+$alltotal = $totalFiles.Count + $totalFolders.Count
+$count = 0
+Write-Host            "*********************************************" -ForegroundColor Yellow
+Write-Host
+Write-Color -Text "@","There are ", $totalFiles.Count, " files in ", $totalFolders.Count, " folders","@" -Color Yellow, Yellow, Magenta, Yellow, Magenta, Yellow, Yellow
+Write-Host
+Write-Host "Now ready to loop through folders...."
+Write-Host
+
+LoopFolders $Global:rootpath
+
+#while (!$async.IsCompleted) {
+#  $anim | % {
+#    Write-Host "`r$_" -NoNewline -ForegroundColor Yellow 
+#    Start-Sleep -m 50
+#  }
+#}
+
+
+
+
+#$Path = Select-FolderDialog # the variable contains user folder selection
+
+
+ 
+
+#Clean up
+$Global:word.quit() 
+$Global:PowerP.quit()
+$Global:Excel.quit()
+
+
+    Write-Host
+    Write-Host "***********************************************" -ForegroundColor Yellow
+    Write-Host "|     Conversions Complete, no more work!     |" -ForegroundColor Yellow
+    Write-Host "***********************************************" -ForegroundColor Yellow
+    Write-Host
+    Write-Host
+    Write-Host "Press <Enter> to end session." -ForegroundColor Yellow
+    Read-Host 
+    exit
+
+    
+
