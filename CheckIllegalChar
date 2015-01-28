@@ -1,0 +1,125 @@
+function Check-IllegalCharacters ($Path, [switch]$Fix, [switch]$Verbose)
+{
+    
+
+    Write-Host Checking files in $Path, please wait...
+    #Get all files and folders under the path specified
+    $items = Get-ChildItem -Path $Path -Recurse
+    foreach ($item in $items)
+    {
+        #Check if the item is a file or a folder
+        if ($item.PSIsContainer) { $type = "Folder" }
+        else { $type = "File" }
+        
+        #Report item has been found if verbose mode is selected
+        if ($Verbose) { Write-Host Found a $type called $item.FullName }
+        
+        #Check if item name is 128 characters or more in length
+        if ($item.Name.Length -gt 127)
+        {
+            Write-Host $type $item.Name is 128 characters or over and will need to be truncated -ForegroundColor Red
+        }
+        else
+        {
+            #Got this from http://powershell.com/cs/blogs/tips/archive/2011/05/20/finding-multiple-regex-matches.aspx
+            $illegalChars = '[&{}~#%]'
+            filter Matches($illegalChars)
+            {
+                $item.Name | Select-String -AllMatches $illegalChars |
+                Select-Object -ExpandProperty Matches
+                Select-Object -ExpandProperty Values
+            }
+            
+            #Replace illegal characters with legal characters where found
+            $newFileName = $item.Name
+            Matches $illegalChars | ForEach-Object {
+                Write-Host $type $item.FullName has the illegal character $_.Value -ForegroundColor Red
+                #These characters may be used on the file system but not SharePoint
+                if ($_.Value -match "&") { $newFileName = ($newFileName -replace "&", "and") }
+                if ($_.Value -match "{") { $newFileName = ($newFileName -replace "{", "(") }
+                if ($_.Value -match "}") { $newFileName = ($newFileName -replace "}", ")") }
+                if ($_.Value -match "~") { $newFileName = ($newFileName -replace "~", "-") }
+                if ($_.Value -match "#") { $newFileName = ($newFileName -replace "#", "") }
+                if ($_.Value -match "%") { $newFileName = ($newFileName -replace "%", "") }
+            }
+            
+            #Check for start, end and double periods
+            if ($newFileName.StartsWith(".")) { Write-Host $type $item.FullName starts with a period -ForegroundColor red }
+            while ($newFileName.StartsWith(".")) { $newFileName = $newFileName.TrimStart(".") }
+            if ($newFileName.EndsWith(".")) { Write-Host $type $item.FullName ends with a period -ForegroundColor Red }
+            while ($newFileName.EndsWith("."))   { $newFileName = $newFileName.TrimEnd(".") }
+            if ($newFileName.Contains("..")) { Write-Host $type $item.FullName contains double periods -ForegroundColor red }
+            while ($newFileName.Contains(".."))  { $newFileName = $newFileName.Replace("..", ".") }
+            
+            #Fix file and folder names if found and the Fix switch is specified
+            if (($newFileName -ne $item.Name) -and ($Fix))
+            {
+                Rename-Item $item.FullName -NewName ($newFileName)
+                Write-Host $type $item.Name has been changed to $newFileName -ForegroundColor Green
+            }
+        }
+    }
+
+    
+
+}
+
+Function Select-FolderDialog
+{
+    param([string]$Description="Select Folder",[string]$RootFolder="Desktop")
+
+ [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") |
+     Out-Null     
+
+   $objForm = New-Object System.Windows.Forms.FolderBrowserDialog
+        $objForm.Rootfolder = $RootFolder
+        $objForm.Description = $Description
+        $Show = $objForm.ShowDialog()
+        If ($Show -eq "OK")
+        {
+            Return $objForm.SelectedPath
+        }
+        Else
+        {
+            Write-Error "Operation cancelled by user."
+        }
+    }
+
+Write-Host "***************************************************************************" -ForegroundColor Yellow
+Write-Host "| Please select the folder you wish to check for O365 illegal characters. |" -ForegroundColor Yellow
+Write-Host "***************************************************************************" -ForegroundColor Yellow
+
+
+$Path = Select-FolderDialog # the variable contains user folder selection
+
+ if ($Path -eq $null) {
+            Write-Host "************************************************" -ForegroundColor Yellow
+            Write-Host "| No path chosen!                              |" -ForegroundColor Yellow
+            Write-Host "| Derpy Derp! Cannot Proceed!                  |" -ForegroundColor Yellow
+            Write-Host "|                                              |" -ForegroundColor Yellow
+            Write-Host "| Rerun the script and choose a folder, else...|" -ForegroundColor Yellow
+            Write-Host "|                                              |" -ForegroundColor Yellow
+            Write-Host "| Press <Enter> to end session.                |" -ForegroundColor Yellow
+            Write-Host "************************************************" -ForegroundColor Yellow
+    
+            Read-Host 
+            exit       
+ }
+else {
+
+
+
+Check-IllegalCharacters $Path -Fix 
+
+}
+
+    Write-Host "***********************************************" -ForegroundColor Yellow
+    Write-Host "|        Check Complete, no more work!        |" -ForegroundColor Yellow
+    Write-Host "|                  Files OK!                  |" -ForegroundColor Yellow
+    Write-Host "***********************************************" -ForegroundColor Yellow
+    Write-Host
+    Write-Host
+    Write-Host "Press <Enter> to end session." -ForegroundColor Yellow
+    Read-Host 
+    exit
+
