@@ -1,0 +1,13 @@
+function SetFileTimes([string]$oldFilePath,[string] $newFilePath){
+   $oldFile = $null
+   $newFile = $null
+    $oldFile = Get-Item -Path  $oldFilePath
+    $newFile = Get-Item -Path $newFilePath
+    if($newFile -ne $null){
+        if($oldFile -ne $null){
+            $NewFile.CreationTime= $oldFile.CreationTime
+            $NewFile.LastAccessTime= $oldFile.LastAccessTime
+            $NewFile.LastWriteTime = $oldFile.LastWriteTime 
+        }
+    }
+}
