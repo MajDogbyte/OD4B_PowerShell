@@ -19,7 +19,7 @@ function Select-FolderDialog([string]$Message, [string]$InitialDirectory){
     
             Write-Host "************************************************" -ForegroundColor Yellow
             Write-Host "| No path chosen!                              |" -ForegroundColor Yellow
-            Write-Host "| Derpy Derp! Cannot Proceed!                  |" -ForegroundColor Yellow
+            Write-Host "| Cannot Proceed!                              |" -ForegroundColor Yellow
             Write-Host "|                                              |" -ForegroundColor Yellow
             Write-Host "| Rerun the script and choose a folder, else...|" -ForegroundColor Yellow
             Write-Host "|                                              |" -ForegroundColor Yellow
