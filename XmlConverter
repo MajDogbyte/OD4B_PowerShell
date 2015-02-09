@@ -160,7 +160,7 @@ function LoopFolders($CurrFolderPath){
         $CurrFilePath = $_.FullName
         $Global:outpath = $CurrFolderPath
         #$backuppath = $CurrFolderPath.Replace($Global:rootpath,$Global:backuprootpath)
-      # If((Test-Path $backuppath ) -eq $false){                                    \\This area disables the creation of a backup path
+      # If((Test-Path $backuppath ) -eq $false){   \\This area disables the creation of a backup path
        #     new-item -itemtype Directory -Force -Path $backuppath -Confirm:$false
        
        
@@ -206,7 +206,7 @@ Write-Color -Text "|"," Please select the folder you wish to convert the content
 Write-Color -Text "|"," O365 compatible. ","                                            |" -Color Yellow, Green, Yellow 
 Write-Host "****************************************************************" -ForegroundColor Yellow
 
-$anim=@("|","/","-","\","|") # Animation sequence characters
+#$anim=@("|","/","-","\","|") # Animation sequence characters
 
 Write-Host
 Write-Host
@@ -261,7 +261,7 @@ LoopFolders $Global:rootpath
 
 
 
-#$Path = Select-FolderDialog # the variable contains user folder selection
+
 
 
  
